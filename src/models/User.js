@@ -36,6 +36,8 @@ const employerVerificationSchema = new mongoose.Schema({
   },
   requestedAt:    { type: Date, default: Date.now },
   respondedAt:    { type: Date },
+  verificationToken:  { type: String }, 
+  notes:              { type: String },  
 });
  
 // ── Sub-schema: GitHub Stats (M1 FE-5) ───────────────────────────────────────
@@ -81,91 +83,94 @@ const userSchema = new mongoose.Schema(
     // ── Core Identity ────────────────────────────────────────────────────────
     name:     { type: String, trim: true },
     email:    { type: String, required: true, unique: true, lowercase: true, trim: true },
-    password: { type: String },             // null for Google OAuth users
+    password: { type: String },             // null for Google/GitHub OAuth users
     passwordChangedAt: { 
     type: Date 
   },
     role:     { type: String, enum: ["freelancer", "client"], required: true },
     avatarUrl:{ type: String },             // profile picture URL
  
-    // ── Auth & Verification (M1 FE-2, FE-4) ─────────────────────────────────
-    isVerified:       { type: Boolean, default: false },  // email verified via OTP
-    otp:              { type: String },                   // current OTP code
-    otpExpiry:        { type: Date },                     // OTP expiry timestamp
+    // ── Auth & Verification ──────────────────────────────────────────────────
+    isVerified:       { type: Boolean, default: false },
+    otp:              { type: String },
+    otpExpiry:        { type: Date },
     authProvider:     {
       type: String,
       enum: ["local", "google", "github"],
       default: "local",
     },
-    googleId:         { type: String },     // for Google OAuth users
-    githubId:         { type: String },     // for GitHub OAuth users
- 
-    // ── Account Security (Screen 22 — Account Lock) ──────────────────────────
+    googleId:         { type: String },
+    githubId:         { type: String },     // GitHub unique ID
+    
+    // NEW FIELDS FOR SKILL VERIFICATION
+    githubUsername:   { type: String },     // e.g., "zainab-dev"
+    githubAccessToken:{ type: String },     // The private key Safire uses to read repos
+
+    // ── Account Security ─────────────────────────────────────────────────────
     loginAttempts:    { type: Number, default: 0 },
-    lockUntil:        { type: Date },       // locked until this timestamp
- 
-    // ── Password Reset (Screen 18/19) ────────────────────────────────────────
+    lockUntil:        { type: Date },
+
+    // ── Password Reset ───────────────────────────────────────────────────────
     resetPasswordToken:  { type: String },
     resetPasswordExpiry: { type: Date },
  
-    // ── Basic Profile (M5 — Freelancer, M12 — Client) ────────────────────────
-    headline:    { type: String },          // "Full Stack Developer | React & Node"
-    bio:         { type: String },          // personal bio / about me
-    location:    { type: String },          // "Islamabad, Pakistan"
+    // ── Basic Profile ────────────────────────────────────────────────────────
+    headline:    { type: String },
+    bio:         { type: String },
+    location:    { type: String },
     phone:       { type: String },
     profileComplete: { type: Boolean, default: false },
  
-    // ── Social & External Links (M6 FE-3) ────────────────────────────────────
+    // ── Social & External Links ──────────────────────────────────────────────
     linkedinUrl:  { type: String },
     githubUrl:    { type: String },
     websiteUrl:   { type: String },
  
-    // ── Resume (M6 FE-3, M1 FE-5) ────────────────────────────────────────────
-    resumeUrl:    { type: String },         // uploaded resume file URL
-    resumeText:   { type: String },         // extracted plain text from resume (for AI)
+    // ── Resume ───────────────────────────────────────────────────────────────
+    resumeUrl:    { type: String },
+    resumeText:   { type: String },
+    resumeFileName: { type: String },
  
-    // ── Skills — AI Extracted (M1 FE-5) ──────────────────────────────────────
+    // ── Skills — AI Extracted ────────────────────────────────────────────────
     skills:       [skillSchema],
  
-    // ── GitHub Stats — fetched via GitHub API (M1 FE-5) ──────────────────────
+    // ── GitHub Stats — fetched via GitHub API ────────────────────────────────
     githubStats:  { type: githubStatsSchema, default: () => ({}) },
  
-    // ── Portfolio (M5, M14) ───────────────────────────────────────────────────
+    // ── Portfolio ────────────────────────────────────────────────────────────
     portfolio:    [portfolioItemSchema],
  
-    // ── Employer Verification (M1 FE-6, M10) ─────────────────────────────────
+    // ── Employer Verification ────────────────────────────────────────────────
     employerVerifications: [employerVerificationSchema],
  
-    // ── Trust Score (Module 4) ────────────────────────────────────────────────
+    // ── Trust Score ──────────────────────────────────────────────────────────
     trustScore:   { type: trustScoreSchema, default: () => ({}) },
-    isFlagged:    { type: Boolean, default: false },   // flagged by scam detection
+    isFlagged:    { type: Boolean, default: false },
     flagReason:   { type: String },
  
-    // ── Client-only: Company Profile (M12) ───────────────────────────────────
-    // Only populated when role === "client"
+    // ── Client-only: Company Profile ──────────────────────────────────────────
     company:      { type: companyProfileSchema, default: () => ({}) },
  
-    // ── Admin Controls (Module 6) ─────────────────────────────────────────────
-    isActive:     { type: Boolean, default: true },    // admin can deactivate
-    isSuspended:  { type: Boolean, default: false },   // admin suspended
+    // ── Admin Controls ───────────────────────────────────────────────────────
+    isActive:     { type: Boolean, default: true },
+    isSuspended:  { type: Boolean, default: false },
     suspendReason:{ type: String },
     isAdmin:      { type: Boolean, default: false },
  
-    // ── Onboarding State (tracks which screens are complete) ─────────────────
+    // ── Onboarding State ─────────────────────────────────────────────────────
     onboarding: {
-      roleSelected:         { type: Boolean, default: false },  // M1
-      emailVerified:        { type: Boolean, default: false },  // M3
-      basicProfileDone:     { type: Boolean, default: false },  // M5 / M12
-      socialLinked:         { type: Boolean, default: false },  // M6
-      aiProcessingDone:     { type: Boolean, default: false },  // M7
-      skillsReviewed:       { type: Boolean, default: false },  // M8 / M9
+      roleSelected:         { type: Boolean, default: false },
+      emailVerified:        { type: Boolean, default: false },
+      basicProfileDone:     { type: Boolean, default: false },
+      socialLinked:         { type: Boolean, default: false },
+      aiProcessingDone:     { type: Boolean, default: false },
+      skillsReviewed:       { type: Boolean, default: false },
     },
   },
   {
-    timestamps: true,   // adds createdAt and updatedAt automatically
+    timestamps: true,
   }
 );
- 
 // ════════════════════════════════════════════════════════════════════════════
 //  INDEXES — speeds up common queries
 // ════════════════════════════════════════════════════════════════════════════
