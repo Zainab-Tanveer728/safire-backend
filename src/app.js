@@ -1,53 +1,3 @@
-// const express = require('express');
-// const dotenv = require('dotenv');
-// const cors = require('cors');
-// const session = require('express-session'); // ADD THIS
-// const passport = require('passport'); // ADD THIS
-// const connectDB = require('./config/db');
-// const authRoutes = require('./routes/authRoutes');
-// const mongoose = require('mongoose')
-
-// // 1. Load Environment Variables (Must be very first)
-// dotenv.config();
-
-// // 2. Initialize the App
-// const app = express();
-
-// // 3. Connect to Database
-// connectDB();
-
-// // 4. Import Passport Config
-// // This runs the code inside passport.js to set up the Google Strategy
-// require('../passport.js'); 
-
-// // 5. Essential Middleware
-// app.use(cors());
-// app.use(express.json());
-
-// // 6. Session & Passport Middleware (Must be before routes)
-// app.use(session({
-//   secret: process.env.JWT_SECRET,
-//   resave: false,
-//   saveUninitialized: false,
-// }));
-
-// app.use(passport.initialize());
-// app.use(passport.session());
-
-// // 7. Routes
-// app.use('/api/auth', authRoutes);
-
-// app.get('/', (req, res) => {
-//   res.send('API is running successfully.');
-// });
-
-// // 8. Start Server
-// const PORT = process.env.PORT || 5000;
-// app.listen(PORT, () => {
-//   console.log(`🚀 Server running on port ${PORT}`);
-// });
-
-// app.js — in safire-backend root (NOT inside src/)
 const express  = require('express');
 const dotenv   = require('dotenv');
 const cors     = require('cors');
@@ -75,6 +25,17 @@ app.use(session({
 
 app.use(passport.initialize());
 app.use(passport.session());
+app.use(session({
+  secret:            process.env.JWT_SECRET,
+  resave:            false,
+  saveUninitialized: false,
+  cookie: {
+    secure:   false,       // set to true in production with HTTPS
+    httpOnly: true,
+    maxAge:   10 * 60 * 1000, // 10 minutes — only needs to last for OAuth flow
+    sameSite: 'lax',
+  }
+}));
 
 const rateLimit = require('express-rate-limit');
 app.use('/api/', rateLimit({
@@ -86,6 +47,7 @@ app.use('/api/', rateLimit({
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/profile', require('./routes/profileRoutes'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/api/ai', require('./routes/aiRoutes'));
 
 app.get('/', (req, res) => res.send('API is running.'));
 
