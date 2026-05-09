@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express  = require('express');
 const dotenv   = require('dotenv');
 const cors     = require('cors');
@@ -48,7 +49,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/profile', require('./routes/profileRoutes'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/ai', require('./routes/aiRoutes'));
-
+app.use('/api/freelancer', require('./routes/freelancerRoutes'));
 app.get('/', (req, res) => res.send('API is running.'));
 
 const PORT = process.env.PORT || 5000;
