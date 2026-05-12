@@ -48,6 +48,9 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/profile', require('./routes/profileRoutes'));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/ai', require('./routes/aiRoutes'));
+// Serve logo uploads
+app.use('/uploads/logos', express.static(path.join(__dirname, '../uploads/logos')));
+
 
 app.get('/', (req, res) => res.send('API is running.'));
 

@@ -241,3 +241,96 @@ exports.respondToVerification = async (req, res) => {
     res.status(500).json({ message: 'Server error.' });
   }
 };
+// ════════════════════════════════════════════════════════════════
+//  SAVE CLIENT COMPANY PROFILE
+//  PUT /api/profile/client/company
+// ════════════════════════════════════════════════════════════════
+exports.saveCompanyProfile = async (req, res) => {
+  try {
+    const {
+      companyName, jobTitle, website,
+      industry, companySize, country, description,
+    } = req.body;
+
+    if (!companyName?.trim())
+      return res.status(400).json({ message: 'Company name is required.' });
+    if (!industry)
+      return res.status(400).json({ message: 'Industry is required.' });
+    if (!country)
+      return res.status(400).json({ message: 'Country is required.' });
+    if (website && !/^https?:\/\/.+/.test(website))
+      return res.status(400).json({ message: 'Website must start with http:// or https://' });
+
+    const updateData = {
+      'company.companyName':  companyName.trim(),
+      'company.description':  description?.trim() || '',
+      'company.industry':     industry,
+      'company.companySize':  companySize || '',
+      'company.website':      website?.trim() || '',
+      'company.location':     country,
+      'onboarding.basicProfileDone': true,
+    };
+
+    // Job title goes on the user level
+    if (jobTitle?.trim()) updateData.headline = jobTitle.trim();
+
+    // Logo upload
+    if (req.file) {
+      updateData['company.companyLogoUrl'] = `/uploads/logos/${req.file.filename}`;
+    }
+
+    // Calculate trust score
+    let trustScore = 0;
+    const user = await User.findById(req.user._id);
+    if (user?.isVerified)       trustScore += 20;
+    if (companyName)            trustScore += 15;
+    if (industry)               trustScore += 15;
+    if (website)                trustScore += 10;
+    if (description)            trustScore += 15;
+    if (companySize)            trustScore += 10;
+    if (country)                trustScore += 10;
+    trustScore = Math.min(trustScore, 100);
+
+    updateData['trustScore.overall']     = trustScore;
+    updateData['trustScore.lastUpdated'] = new Date();
+
+    const updated = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('-password -githubAccessToken');
+
+    if (!updated) return res.status(404).json({ message: 'User not found.' });
+
+    res.json({
+      success: true,
+      message: 'Company profile saved.',
+      user: {
+        company:    updated.company,
+        headline:   updated.headline,
+        onboarding: updated.onboarding,
+        trustScore: updated.trustScore,
+      },
+    });
+
+  } catch (err) {
+    console.error('Save company profile error:', err.message);
+    res.status(500).json({ message: 'Server error: ' + err.message });
+  }
+};
+
+// ════════════════════════════════════════════════════════════════
+//  GET CLIENT PROFILE
+//  GET /api/profile/client/me
+// ════════════════════════════════════════════════════════════════
+exports.getClientProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select(
+      'name email headline avatarUrl role company onboarding trustScore isVerified'
+    );
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+    res.json({ user });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error.' });
+  }
+};

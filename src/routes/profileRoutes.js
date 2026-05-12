@@ -16,6 +16,8 @@ const {
   requestEmployerVerification,
   getVerificationForm,
   respondToVerification,
+  saveCompanyProfile,   // ADD
+  getClientProfile,     // ADD
 } = require('../controllers/profileController');
 
 // ── Helper ────────────────────────────────────────────────────────
@@ -30,9 +32,29 @@ const RESUMES_DIR = path.join(ROOT, 'uploads/resumes');
 ensureDir(AVATARS_DIR);
 ensureDir(RESUMES_DIR);
 
+const LOGOS_DIR = path.join(ROOT, 'uploads/logos');
+ensureDir(LOGOS_DIR);
+
 // ════════════════════════════════════════════════════════════════
 //  MULTER — AVATAR
 // ════════════════════════════════════════════════════════════════
+
+const logoStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, LOGOS_DIR),
+  filename:    (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `logo_${req.user._id}_${Date.now()}${ext}`);
+  },
+});
+const logoUpload = multer({
+  storage:    logoStorage,
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/svg+xml', 'image/png', 'image/jpeg'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only SVG, PNG, JPG are accepted.'), false);
+  },
+  limits: { fileSize: 2 * 1024 * 1024 },
+});
 
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, AVATARS_DIR),
@@ -199,6 +221,8 @@ router.post(
   }
 );
 
+
+
 // ════════════════════════════════════════════════════════════════
 //  SKILLS + EMPLOYER VERIFICATION
 // ════════════════════════════════════════════════════════════════
@@ -208,4 +232,6 @@ router.post('/employer-verification',        protect, requestEmployerVerificatio
 router.get('/employer-verification/:token',  getVerificationForm);
 router.post('/employer-verification/respond', respondToVerification);
 
+router.put('/client/company', protect, handleMulterError(logoUpload.single('logo')), saveCompanyProfile);
+router.get('/client/me',      protect, getClientProfile);
 module.exports = router;
