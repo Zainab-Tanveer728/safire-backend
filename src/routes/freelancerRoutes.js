@@ -3,6 +3,7 @@ const router  = express.Router();
 const multer  = require('multer');
 const path    = require('path');
 const { protect } = require('../middleware/authMiddleware');
+const Proposal = require('../models/Proposal'); // Ye line missing thi router file mein
 
 const {
   generateProposal,
