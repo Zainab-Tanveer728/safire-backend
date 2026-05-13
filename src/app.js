@@ -1,56 +1,64 @@
 require('dotenv').config();
-const express  = require('express');
-const dotenv   = require('dotenv');
-const cors     = require('cors');
-const session  = require('express-session');
-const passport = require('passport');
-const connectDB = require('./config/db');  // FIX: was ./config/db
-const path = require('path');
+const express   = require('express');
+const cors      = require('cors');
+const session   = require('express-session');
+const passport  = require('passport');
+const rateLimit = require('express-rate-limit');
+const path      = require('path');
 
-dotenv.config();
+const connectDB = require('./config/db');
+
+// ── DB + Passport ──────────────────────────────────────────────────────────
+connectDB();
+require('../passport');
 
 const app = express();
 
-connectDB();
+// ── CORS — must be first, before everything else ───────────────────────────
+const corsOptions = {
+  origin:         process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials:    true,
+  methods:        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions)); 
 
-require('../passport');  // FIX: was ../passport.js — this is correct since app.js is in root
-
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
 app.use(express.json());
 
-app.use(session({
-  secret: process.env.JWT_SECRET,
-  resave: false,
-  saveUninitialized: false,
-}));
-
-app.use(passport.initialize());
-app.use(passport.session());
+// ── Session (single registration) ─────────────────────────────────────────
 app.use(session({
   secret:            process.env.JWT_SECRET,
   resave:            false,
   saveUninitialized: false,
   cookie: {
-    secure:   false,       // set to true in production with HTTPS
+    secure:   false,          // set true in production with HTTPS
     httpOnly: true,
-    maxAge:   10 * 60 * 1000, // 10 minutes — only needs to last for OAuth flow
+    maxAge:   10 * 60 * 1000, // 10 min — enough for OAuth flow
     sameSite: 'lax',
-  }
+  },
 }));
 
-const rateLimit = require('express-rate-limit');
+// ── Passport ───────────────────────────────────────────────────────────────
+app.use(passport.initialize());
+app.use(passport.session());
+
+// ── Rate limiting ──────────────────────────────────────────────────────────
 app.use('/api/', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { message: 'Too many requests. Please slow down.' }
+  max:      100,
+  message:  { message: 'Too many requests. Please slow down.' },
 }));
 
-app.use('/api/auth', require('./routes/authRoutes'));
+// ── Routes ─────────────────────────────────────────────────────────────────
+app.use('/api/auth',    require('./routes/authRoutes'));
 app.use('/api/profile', require('./routes/profileRoutes'));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/api/ai', require('./routes/aiRoutes'));
+app.use('/api/ai',      require('./routes/aiRoutes'));
+app.use('/api/admin',   require('./routes/adminRoutes'));
+app.use('/uploads',     express.static(path.join(__dirname, 'uploads')));
 
 app.get('/', (req, res) => res.send('API is running.'));
 
+// ── Start ──────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

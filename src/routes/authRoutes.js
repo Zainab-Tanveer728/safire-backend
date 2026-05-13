@@ -1,10 +1,10 @@
-const express   = require('express');
-const bcrypt    = require('bcryptjs');
-const jwt       = require('jsonwebtoken');
+const express    = require('express');
+const bcrypt     = require('bcryptjs');
+const jwt        = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
-const rateLimit = require('express-rate-limit');
-const passport  = require('passport');
-const router    = express.Router();
+const rateLimit  = require('express-rate-limit');
+const passport   = require('passport');
+const router     = express.Router();
 
 const User = require('../models/User');
 const { protect } = require('../middleware/authMiddleware');
@@ -80,15 +80,12 @@ router.get('/google/callback',
 );
 
 // ════════════════════════════════════════════════════════════════
-//  GITHUB OAUTH  (skill verification — not login)
-//  /connect  → triggers passport github strategy
-//  /callback → passport saves token to user, redirects frontend
-//  /data     → frontend fetches repos + languages after connection
+//  GITHUB OAUTH
 // ════════════════════════════════════════════════════════════════
 
-router.get('/github/connect', protect, githubConnect);
+router.get('/github/connect',  protect, githubConnect);
 router.get('/github/callback', githubCallback);
-router.get('/github/data',    protect, getGitHubData);
+router.get('/github/data',     protect, getGitHubData);
 
 // ════════════════════════════════════════════════════════════════
 //  REGISTER
@@ -117,11 +114,15 @@ router.post('/register', registerLimiter, async (req, res) => {
     if (!name || !email || !password || !role)
       return res.status(400).json({ message: 'All fields are required.' });
 
+    // Block registration with admin role — admin is created via seed script only
+    if (role === 'admin')
+      return res.status(400).json({ message: 'Invalid role.' });
+
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ message: 'Email already registered.' });
 
-    const hashed   = await bcrypt.hash(password, 12);
-    const otp      = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashed    = await bcrypt.hash(password, 12);
+    const otp       = Math.floor(100000 + Math.random() * 900000).toString();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     const user = await User.create({ name, email, password: hashed, role, otp, otpExpiry });
@@ -135,6 +136,11 @@ router.post('/register', registerLimiter, async (req, res) => {
 
 // ════════════════════════════════════════════════════════════════
 //  LOGIN
+//
+//  FIX: Use updateOne() instead of user.save() for resetting
+//  loginAttempts and lockUntil. This bypasses the Mongoose pre-save
+//  hook which throws "Setting role to 'admin' is not permitted"
+//  for any existing admin document that doesn't have __allowAdminRole.
 // ════════════════════════════════════════════════════════════════
 
 router.post('/login', async (req, res) => {
@@ -142,34 +148,66 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
 
+    // Account locked check
     if (user?.lockUntil && user.lockUntil > Date.now()) {
       return res.status(423).json({ message: 'Account locked. Try again later.' });
     }
 
+    // Invalid credentials
     if (!user || !(await bcrypt.compare(password, user.password))) {
       if (user) {
-        user.loginAttempts += 1;
-        if (user.loginAttempts >= 5)
-          user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
-        await user.save();
+        const attempts = (user.loginAttempts || 0) + 1;
+        const update = { loginAttempts: attempts };
+        if (attempts >= 5) update.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+        // Use updateOne — skips pre-save hook entirely
+        await User.updateOne({ _id: user._id }, { $set: update });
       }
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
 
-    if (!user.isVerified)
+    // Email not verified — admin is always verified, so this only blocks regular users
+    if (!user.isVerified) {
       return res.status(403).json({ message: 'Verify email first.', userId: user._id });
+    }
 
-    user.loginAttempts = 0;
-    user.lockUntil     = null;
-    await user.save();
+    // Account suspended or removed
+    if (user.status === 'suspended') {
+      return res.status(403).json({ message: 'Account suspended. Contact support.' });
+    }
+    if (user.status === 'removed') {
+      return res.status(403).json({ message: 'Account no longer exists.' });
+    }
+
+    // Reset failed attempts using updateOne — skips pre-save hook
+    await User.updateOne(
+      { _id: user._id },
+      { $set: { loginAttempts: 0, lockUntil: null } }
+    );
 
     const token = jwt.sign(
       { userId: user._id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
-    res.json({ token, role: user.role, name: user.name, userId: user._id });
+
+    res.json({
+      token,
+      role:   user.role,
+      name:   user.name,
+      userId: user._id,
+      // Include full user object so AuthContext can store it
+      user: {
+        _id:       user._id,
+        name:      user.name,
+        email:     user.email,
+        role:      user.role,
+        status:    user.status,
+        avatarUrl: user.avatarUrl || null,
+      },
+    });
+
   } catch (err) {
+    console.error('Login error:', err.message);
     res.status(500).json({ message: 'Server error.' });
   }
 });
@@ -187,13 +225,19 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ message: 'Invalid or expired OTP.' });
     }
 
-    user.isVerified = true;
-    user.otp        = null;
-    user.otpExpiry  = null;
-    user['onboarding.emailVerified'] = true;
-    await user.save();
+    // Use updateOne to avoid triggering the pre-save hook
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          isVerified:                   true,
+          otp:                          null,
+          otpExpiry:                    null,
+          'onboarding.emailVerified':   true,
+        },
+      }
+    );
 
-    // Return token so frontend can store it and pass ProtectedRoute
     const token = jwt.sign(
       { userId: user._id, role: user.role },
       process.env.JWT_SECRET,
@@ -208,6 +252,7 @@ router.post('/verify-otp', async (req, res) => {
       onboarding: user.onboarding,
     });
   } catch (err) {
+    console.error('Verify OTP error:', err.message);
     res.status(500).json({ message: 'Server error.' });
   }
 });
@@ -244,9 +289,17 @@ router.post('/reset-password', async (req, res) => {
     const user    = await User.findById(decoded.userId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
 
-    user.password           = await bcrypt.hash(newPassword, 12);
-    user.passwordChangedAt  = new Date();
-    await user.save();
+    // Use updateOne to bypass pre-save hook
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          password:          await bcrypt.hash(newPassword, 12),
+          passwordChangedAt: new Date(),
+        },
+      }
+    );
+
     res.json({ message: 'Password reset successfully.' });
   } catch (err) {
     res.status(400).json({ message: 'Link expired or invalid.' });
