@@ -124,11 +124,16 @@ const { protect } = require('../middleware/authMiddleware');   // was './middlew
 const Proposal = require('../models/Proposal');
 
 const {
-  generateProposal,
   analyseSkillGap,
+  getLatestSkillGapReport,
+  getSkillGapRoles,
+} = require('../controllers/skillGapController');
+
+const {
   enhanceResume,
-  optimizeGig,
-} = require('../controllers/freelancerController');
+  scoreResume,
+  applyResumeVersion,
+} = require('../controllers/resumeEnhancerController');
 
 // ── Multer config for resume upload ──────────────────────────────
 // Resumes are private: app.js no longer serves /uploads/resumes publicly.
@@ -240,8 +245,12 @@ router.post(
   enhanceResume
 );
 
-// POST /api/freelancer/optimize-gig
-// FR2.4 — Gig optimization with TF-IDF market analysis
-router.post('/optimize-gig', protect, optimizeGig);
+// FR2.4 — Gig optimization (controllers/gigOptimizerController.js, uses the Python AI service)
+// GET  /api/freelancer/gig-optimizer/profile      name, title, skills to pre-fill the form (FR21.3)
+// GET  /api/freelancer/gig-optimizer/categories   popular gig categories for auto-suggest (FR21.1)
+// POST /api/freelancer/optimize-gig               TF-IDF market analysis + LLM wording (FR21.4)
+router.get('/gig-optimizer/profile',    protect, restrictTo('freelancer'), getGigOptimizerProfile);
+router.get('/gig-optimizer/categories', protect, restrictTo('freelancer'), getGigCategories);
+router.post('/optimize-gig',            protect, restrictTo('freelancer'), optimizeGig);
 
 module.exports = router;
