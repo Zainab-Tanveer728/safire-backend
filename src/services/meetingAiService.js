@@ -1,27 +1,36 @@
 // src/services/meetingAiService.js
-// The backend's phone line to the Python AI service (safire-ai, port 8001).
-// Uses YOUR models (Whisper + RoBERTa). No Gemini / Groq / outside API.
-// Needs Node 18+ (built-in fetch, FormData, Blob).
-const fs   = require('fs');
+// The backend's phone line to the Python AI service (safire-ai).
+// Uses YOUR models (Whisper + RoBERTa). Needs Node 18+.
+const fs = require('fs');
 
-const AI_URL     = (process.env.AI_SERVICE_URL || 'http://localhost:8001').replace(/\/$/, '');
-const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 10 * 60 * 1000);   // Whisper can take minutes
+const AI_URL = (process.env.AI_SERVICE_URL || 'http://localhost:8000').replace(/\/$/, '');
+
+const QUICK_TIMEOUT_MS      = Number(process.env.AI_TIMEOUT_MS || 30 * 1000);              // health etc.
+const EXTRACT_TIMEOUT_MS    = Number(process.env.AI_EXTRACT_TIMEOUT_MS || 2 * 60 * 1000);  // RoBERTa
+const TRANSCRIBE_TIMEOUT_MS = Number(process.env.AI_TRANSCRIBE_TIMEOUT_MS || 10 * 60 * 1000); // Whisper
 
 function needModernNode() {
   if (typeof fetch !== 'function' || typeof FormData === 'undefined' || typeof Blob === 'undefined')
     throw new Error('Node 18 or newer is required for the AI service calls. Run "node -v" to check.');
 }
 
-async function request(path, options = {}) {
+async function request(path, options = {}, timeoutMs = QUICK_TIMEOUT_MS) {
   needModernNode();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res;
   try {
-    res = await fetch(`${AI_URL}${path}`, { ...options, signal: controller.signal });
+    res = await fetch(`${AI_URL}${path}`, {
+      ...options,
+      headers: {
+        'ngrok-skip-browser-warning': 'true',   // skips ngrok's warning page
+        ...(options.headers || {}),
+      },
+      signal: controller.signal,
+    });
   } catch (err) {
     if (err.name === 'AbortError') throw new Error('The AI service took too long to answer.');
-    throw new Error(`Cannot reach the AI service at ${AI_URL}. Is safire-ai running?`);
+    throw new Error(`Cannot reach the AI service at ${AI_URL}. Are safire-ai and ngrok running?`);
   } finally {
     clearTimeout(timer);
   }
@@ -46,7 +55,7 @@ async function transcribe(tracks) {
   }
   form.append('speakers', tracks.map((t) => t.speaker).join(','));
   form.append('offsets',  tracks.map((t) => t.offsetSec || 0).join(','));
-  return request('/api/transcribe', { method: 'POST', body: form });
+  return request('/api/transcribe', { method: 'POST', body: form }, TRANSCRIBE_TIMEOUT_MS);
 }
 
 // segments = [{ segmentId, speaker, startTime, endTime, text }]
@@ -57,7 +66,7 @@ async function extractRequirements(segments, minConfidence) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
+  }, EXTRACT_TIMEOUT_MS);
 }
 
 async function health() {

@@ -16,6 +16,9 @@ require('../passport');
 
 const app = express();
 
+// Render ke proxy ke peeche chalne ke liye (rate limit + secure cookie ke liye zaroori)
+app.set('trust proxy', 1);
+
 // <-- MODULE 2 (wapas joda): multer folder khud nahi banata, isliye yahan banate hain
 ['uploads', path.join('uploads', 'resumes')].forEach((dir) => {
   fs.mkdirSync(path.join(process.cwd(), dir), { recursive: true });
@@ -23,7 +26,7 @@ const app = express();
 
 // ── CORS — must be first, before everything else ───────────────────────────
 const corsOptions = {
-  origin:         process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin:         (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, ''),
   credentials:    true,
   methods:        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -39,7 +42,7 @@ app.use(session({
   resave:            false,
   saveUninitialized: false,
   cookie: {
-    secure:   false,          // set true in production with HTTPS
+    secure:   process.env.NODE_ENV === 'production',   // true on Render (HTTPS)
     httpOnly: true,
     maxAge:   10 * 60 * 1000, // 10 min — enough for OAuth flow
     sameSite: 'lax',
@@ -53,7 +56,7 @@ app.use(passport.session());
 // ── Rate limiting ──────────────────────────────────────────────────────────
 app.use('/api/', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max:      process.env.NODE_ENV === 'production' ? 100 : 5000,
+  max:      process.env.NODE_ENV === 'production' ? 1500 : 5000,   // 100 was too low: pages poll, and examiners share one IP
   message:  { message: 'Too many requests. Please slow down.' },
   skip:     (req) => req.originalUrl.startsWith('/api/meetings')
                   || req.originalUrl.startsWith('/api/notifications'),
