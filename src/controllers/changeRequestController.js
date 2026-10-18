@@ -15,8 +15,8 @@ const ChangeRequest        = require('../models/ChangeRequest');
 const ChangeHistory        = require('../models/ChangeHistory');
 const Dispute              = require('../models/Dispute');
 const ExtractedRequirement = require('../models/ExtractedRequirement');
-const RequirementHistory   = require('../models/RequirementHistory');
-const Requirementdocument  = require('../models/Requirementdocument');
+const RequirementHistory   = require('../models/Requirementhistory');
+const RequirementDocument  = require('../models/Requirementdocument');
 const Project              = require('../models/Project');
 const { notify } = require('../services/notificationService');
 
