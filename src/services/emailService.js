@@ -29,6 +29,9 @@ const nodemailer = require('nodemailer');
 const BRAND = '#6C2BD9';
 
 // ── Transport ──────────────────────────────────────────────────────────────
+// FIX: the old config used `service: 'gmail'` which defaults to port 465 and
+// often times out (ETIMEDOUT) on networks that block 465 or have broken IPv6.
+// Now: port 587 + STARTTLS, forced IPv4, and explicit timeouts.
 let transporter = null;
 
 function getTransporter() {
@@ -38,6 +41,7 @@ function getTransporter() {
   const pass = String(process.env.EMAIL_PASS).replace(/\s+/g, '');
   transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
+<<<<<<< Updated upstream
     port: 465,
     secure: true,
     auth: { user: process.env.EMAIL_USER, pass },
@@ -46,6 +50,16 @@ function getTransporter() {
     connectionTimeout: 10000,
     greetingTimeout:   10000,
     socketTimeout:     15000,
+=======
+    port: 587,
+    secure: false,      // 587 starts plain, then upgrades via STARTTLS
+    requireTLS: true,   // refuse to send if the upgrade to TLS fails
+    family: 4,          // force IPv4 (the IPv6 address was timing out)
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+>>>>>>> Stashed changes
   });
   return transporter;
 }
