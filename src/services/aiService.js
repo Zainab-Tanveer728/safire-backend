@@ -6,6 +6,7 @@ const AI_BACKEND_URL = process.env.AI_BACKEND_URL || 'http://localhost:8001';
 // ════════════════════════════════════════════════════════════════
 //  SKILL EXTRACTION
 //  Calls Python FastAPI backend (Groq/Gemini)
+
 // ════════════════════════════════════════════════════════════════
 
 const extractSkills = async ({ githubLanguages, githubRepos, resumeText }) => {

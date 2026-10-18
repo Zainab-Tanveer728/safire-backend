@@ -34,9 +34,18 @@ let transporter = null;
 function getTransporter() {
   if (transporter) return transporter;
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return null;
+  // Gmail App Passwords are shown with spaces ("abcd efgh ijkl mnop"); they must be removed.
+  const pass = String(process.env.EMAIL_PASS).replace(/\s+/g, '');
   transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: { user: process.env.EMAIL_USER, pass },
+    // Without these, nodemailer waits up to 2 minutes to connect (10 minutes on a stalled
+    // connection), so one unreachable mail server freezes the whole request.
+    connectionTimeout: 10000,
+    greetingTimeout:   10000,
+    socketTimeout:     15000,
   });
   return transporter;
 }
@@ -110,7 +119,9 @@ async function sendEmail({ to, subject, html, text }) {
     });
     return true;
   } catch (err) {
-    console.error('[Email] Failed to', to, '-', err.message);
+    console.error('[Email] Failed to', to, '-', err.code || '', err.message);
+    if (err.code === 'EAUTH') console.error('   Gmail rejected the login. EMAIL_PASS must be a Gmail App Password.');
+    if (err.code === 'ETIMEDOUT' || err.code === 'ECONNECTION' || err.code === 'ESOCKET') console.error('   Cannot reach smtp.gmail.com:465. Check the internet, VPN, firewall or antivirus.');
     return false;
   }
 }
