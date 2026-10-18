@@ -41,25 +41,14 @@ function getTransporter() {
   const pass = String(process.env.EMAIL_PASS).replace(/\s+/g, '');
   transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-<<<<<<< Updated upstream
-    port: 465,
-    secure: true,
-    auth: { user: process.env.EMAIL_USER, pass },
-    // Without these, nodemailer waits up to 2 minutes to connect (10 minutes on a stalled
-    // connection), so one unreachable mail server freezes the whole request.
-    connectionTimeout: 10000,
-    greetingTimeout:   10000,
-    socketTimeout:     15000,
-=======
     port: 587,
     secure: false,      // 587 starts plain, then upgrades via STARTTLS
     requireTLS: true,   // refuse to send if the upgrade to TLS fails
     family: 4,          // force IPv4 (the IPv6 address was timing out)
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+    auth: { user: process.env.EMAIL_USER, pass },
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 20000,
->>>>>>> Stashed changes
   });
   return transporter;
 }
@@ -135,7 +124,7 @@ async function sendEmail({ to, subject, html, text }) {
   } catch (err) {
     console.error('[Email] Failed to', to, '-', err.code || '', err.message);
     if (err.code === 'EAUTH') console.error('   Gmail rejected the login. EMAIL_PASS must be a Gmail App Password.');
-    if (err.code === 'ETIMEDOUT' || err.code === 'ECONNECTION' || err.code === 'ESOCKET') console.error('   Cannot reach smtp.gmail.com:465. Check the internet, VPN, firewall or antivirus.');
+    if (err.code === 'ETIMEDOUT' || err.code === 'ECONNECTION' || err.code === 'ESOCKET') console.error('   Cannot reach smtp.gmail.com:587. Check the internet, VPN, firewall or antivirus.');
     return false;
   }
 }
