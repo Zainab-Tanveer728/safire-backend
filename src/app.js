@@ -5,6 +5,7 @@ const session   = require('express-session');
 const passport  = require('../passport');
 const rateLimit = require('express-rate-limit');
 const path      = require('path');
+const fs        = require('fs');   // <-- MODULE 2 (wapas joda)
 const http = require('http');
 const { attachMeetingSignaling } = require('./socket/meetingSignaling'); 
 const connectDB = require('./config/db');
@@ -14,6 +15,11 @@ connectDB();
 require('../passport');
 
 const app = express();
+
+// <-- MODULE 2 (wapas joda): multer folder khud nahi banata, isliye yahan banate hain
+['uploads', path.join('uploads', 'resumes')].forEach((dir) => {
+  fs.mkdirSync(path.join(process.cwd(), dir), { recursive: true });
+});
 
 // ── CORS — must be first, before everything else ───────────────────────────
 const corsOptions = {
@@ -59,6 +65,7 @@ app.use('/api/profile', require('./routes/profileRoutes'));
 app.use('/api/ai',      require('./routes/aiRoutes'));
 app.use('/api/admin',   require('./routes/adminRoutes'));
 app.use('/api/freelancer', require('./routes/freelancerRoutes')); 
+app.use('/api/proposals',  require('./routes/proposalRoutes'));   // <-- MODULE 2 (wapas joda)
 app.use('/uploads',     express.static(path.join(__dirname, 'uploads')));
 app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
@@ -82,4 +89,3 @@ const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
 app.set('io', attachMeetingSignaling(server));      // live call messages + "meeting ended" push
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
