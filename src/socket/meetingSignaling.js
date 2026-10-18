@@ -25,7 +25,12 @@ const idOf = (x) => String(x?._id || x);
 
 function attachMeetingSignaling(httpServer, { corsOrigin } = {}) {
   const io = new Server(httpServer, {
-    cors: { origin: corsOrigin || process.env.CLIENT_URL || 'http://localhost:5173', credentials: true },
+    // Same address the rest of the backend uses (FRONTEND_URL). Before, this read CLIENT_URL, which
+    // nobody set on the server, so the live site was refused and the call never connected.
+    cors: {
+      origin: String(corsOrigin || process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, ''),
+      credentials: true,
+    },
     maxHttpBufferSize: 1e5,           // signalling messages are tiny; refuse anything big
   });
 
