@@ -66,6 +66,7 @@ exports.createMeeting = async (req, res) => {
     if (scheduledAt) {
       when = new Date(scheduledAt);
       if (Number.isNaN(when.getTime())) return res.status(400).json({ message: 'Invalid meeting date.' });
+      if (when <= new Date()) return res.status(400).json({ message: 'Meeting date must be in the future.' });
     }
     const project = req.project;
 
@@ -181,6 +182,8 @@ exports.startMeeting = async (req, res) => {
     const meeting = req.meeting;
     if (meeting.status !== 'scheduled')
       return res.status(409).json({ message: `Meeting is already ${meeting.status}.` });
+    if (meeting.scheduledAt && meeting.scheduledAt > new Date())
+      return res.status(409).json({ message: 'This meeting is scheduled for a future time and cannot be started yet.' });
     if (!hasBothConsents(meeting))
       return res.status(403).json({ message: 'Both people must give recording consent first.' });
 

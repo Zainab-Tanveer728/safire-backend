@@ -601,6 +601,157 @@ const NOTIFICATION_CATALOG = {
     }),
   }),
 
+  // ══════════ MARKETPLACE: HIRING, OFFERS, DELIVERY, REVIEWS, ENDING A PROJECT ══════════
+  job_invitation: T('jobs', 'action_required', 'You were invited to a job', {
+    email: true, audience: 'the invited freelancer', when: 'Client invites a freelancer from the directory', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'You were invited to a job',
+      message: d.message || 'A client invited you to apply for a job.',
+      link: d.link || '/freelancer/jobs',
+    }),
+  }),
+
+  application_message: T('proposals', 'info', 'New message about a proposal', {
+    audience: 'the other person in the proposal chat', when: 'Either person sends a chat message', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'New message',
+      message: d.message || 'You have a new message about a proposal.',
+      link: d.link || LINKS.myProposals(),
+    }),
+  }),
+
+  offer_received: T('proposals', 'action_required', 'You received an offer', {
+    email: true, audience: 'the freelancer', when: 'Client sends an offer', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'You received an offer',
+      message: d.message || 'A client sent you an offer. Please answer before it expires.',
+      link: d.link || LINKS.myProposals(),
+    }),
+  }),
+
+  offer_accepted: T('proposals', 'success', 'Your offer was accepted', {
+    email: true, audience: 'the client', when: 'Freelancer accepts the offer (project is created)', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'Offer accepted',
+      message: d.message || 'The freelancer accepted your offer. The project has started.',
+      link: d.link || LINKS.home(c.role),
+    }),
+  }),
+
+  offer_declined: T('proposals', 'info', 'Your offer was declined', {
+    audience: 'the client', when: 'Freelancer declines the offer', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'Offer declined',
+      message: d.message || 'The freelancer declined your offer.',
+      link: d.link || LINKS.home(c.role),
+    }),
+  }),
+
+  invitation_declined: T('proposals', 'info', 'Your invitation was declined', {
+    audience: 'the client', when: 'Freelancer declines an invitation', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'Invitation declined',
+      message: d.message || 'The freelancer declined your invitation.',
+      link: d.link || LINKS.home(c.role),
+    }),
+  }),
+
+  offer_withdrawn: T('proposals', 'warning', 'An offer was withdrawn', {
+    audience: 'the freelancer', when: 'Client withdraws a live offer', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'Offer withdrawn',
+      message: d.message || 'The client withdrew the offer.',
+      link: d.link || LINKS.myProposals(),
+    }),
+  }),
+
+  offer_expired: T('proposals', 'warning', 'An offer expired', {
+    audience: 'both people', when: 'Nobody answered an offer in time', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'Offer expired',
+      message: d.message || 'An offer expired before it was answered.',
+      link: d.link || LINKS.home(c.role),
+    }),
+  }),
+
+  delivery_submitted: T('project', 'action_required', 'Work was delivered', {
+    email: true, audience: 'the client', when: 'Freelancer submits work', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'Work delivered',
+      message: d.message || 'The freelancer delivered work. Please review it.',
+      link: d.link || LINKS.project(c.role, d.projectId),
+    }),
+  }),
+
+  delivery_reminder: T('project', 'warning', 'A delivery will be accepted soon', {
+    email: true, audience: 'the client', when: '2 days before the review time ends', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'Please review the delivery',
+      message: d.message || 'A delivery will be accepted automatically soon unless you answer.',
+      link: d.link || LINKS.project(c.role, d.projectId),
+    }),
+  }),
+
+  delivery_auto_accepted: T('project', 'info', 'A delivery was accepted automatically', {
+    email: true, audience: 'the client', when: 'The review time ended with no answer', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'Delivery accepted automatically',
+      message: d.message || 'A delivery was accepted because it was not answered in time.',
+      link: d.link || LINKS.project(c.role, d.projectId),
+    }),
+  }),
+
+  revision_requested: T('project', 'warning', 'Changes were requested', {
+    email: true, audience: 'the freelancer', when: 'Client asks for changes on a delivery', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'Changes requested',
+      message: d.message || 'The client asked for changes on your delivery.',
+      link: d.link || LINKS.project(c.role, d.projectId),
+    }),
+  }),
+
+  cancel_requested: T('project', 'action_required', 'A request to cancel a project', {
+    email: true, audience: 'the other person', when: 'Someone asks to cancel, or it is sent to an admin', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'Request to cancel the project',
+      message: d.message || 'Someone asked to cancel the project. Please answer.',
+      link: d.link || LINKS.project(c.role, d.projectId),
+    }),
+  }),
+
+  cancel_answered: T('project', 'info', 'Your cancellation request was answered', {
+    email: true, audience: 'the person who asked', when: 'The other person accepts or declines', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'Cancellation answered',
+      message: d.message || 'Your request to cancel the project was answered.',
+      link: d.link || LINKS.project(c.role, d.projectId),
+    }),
+  }),
+
+  review_received: T('project', 'info', 'You received a review', {
+    audience: 'the reviewed person', when: 'Someone reviews you', data: 'title?, message?, link?',
+    // controllers pass the finished text and link; the defaults below are used when only a type is given
+    build: (d, c) => ({
+      title: d.title || 'You received a review',
+      message: d.message || 'You received a new review.',
+      link: d.link || LINKS.profile(c.role),
+    }),
+  }),
+
   // ══════════ MODULE 6 — ADMIN ══════════
   admin_security_alert: T('admin', 'action_required', 'Security alert', {
     email: true, mandatory: true,
@@ -659,4 +810,4 @@ module.exports = {
   CATEGORIES,
   LINKS,
   settingsList,
-}; 
+};

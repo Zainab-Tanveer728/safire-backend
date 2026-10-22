@@ -431,7 +431,7 @@ router.put(
 router.get('/me', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select(
-      'name email status headline location bio avatarUrl role onboarding company trustScore githubUsername githubStats resumeUrl resumeFileName skills employerVerifications'
+      'name email status isVerified headline location bio avatarUrl role onboarding company trustScore githubUsername githubStats resumeUrl resumeFileName skills employerVerifications'
     );
     if (!user) return res.status(404).json({ message: 'User not found.' });
 
@@ -443,7 +443,7 @@ router.get('/me', protect, async (req, res) => {
     );
 
     // buildUserPayload last, so the computed onboarding flags win
-    res.json({ user: { ...data, ...buildUserPayload(user) } });
+    res.json({ user: { ...data, ...await buildUserPayload(user) } });
   } catch (err) {
     console.error('[Profile/me]', err.message);
     res.status(500).json({ message: 'Server error.' });
