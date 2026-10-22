@@ -55,5 +55,4 @@ async function remove(key) {
 async function exists(key) {
   try { await getLocalPath(key); return true; } catch { return false; }
 }
-
-module.exports = { put, getLocalPath, remove, exists, driver: DRIVER, root: ROOT };
+module.exports = { put, getLocalPath, remove, exists, safePath, driver: DRIVER, root: ROOT };
