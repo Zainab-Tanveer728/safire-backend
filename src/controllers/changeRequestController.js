@@ -16,7 +16,7 @@ const ChangeHistory        = require('../models/ChangeHistory');
 const Dispute              = require('../models/Dispute');
 const ExtractedRequirement = require('../models/ExtractedRequirement');
 const RequirementHistory   = require('../models/RequirementHistory');
-const Requirementdocument  = require('../models/Requirementdocument');
+const RequirementDocument  = require('../models/RequirementDocument');
 const Project              = require('../models/Project');
 const { notify } = require('../services/notificationService');
 
@@ -172,7 +172,9 @@ exports.list = async (req, res) => {
       discussion: undefined,                         // the detail call has the full thread
       isOpen: OPEN_STATUSES.includes(r.status),
     }));
-    res.json({ changeRequests, counts, baselineSet: !!req.project.requirementsLocked });
+    const ap = req.project.baselineApprovals || {};
+    res.json({ changeRequests, counts, baselineSet: !!req.project.requirementsLocked,
+      baselineApprovals: { client: !!ap.client?.at, freelancer: !!ap.freelancer?.at }, myParty: req.party });
   } catch (err) {
     console.error('[CR:list]', err.message);
     res.status(500).json({ message: 'Server error.' });
@@ -414,8 +416,10 @@ exports.summary = async (req, res) => {
   }
 };
 
-// ── Baseline: lock the confirmed requirements so that only change requests can touch them ──
+// ── Baseline: BOTH people approve the same list of confirmed requirements, then it is locked ──
 // POST /api/change-requests/project/:projectId/baseline
+//   first call  -> records your approval and tells the other person ("waiting for the other side")
+//   second call -> (by the other person, on the same list) locks everything
 exports.setBaseline = async (req, res) => {
   try {
     const project = req.project;
@@ -427,26 +431,51 @@ exports.setBaseline = async (req, res) => {
     const confirmed = await ExtractedRequirement.find({ project: project._id, status: 'confirmed' });
     if (!confirmed.length) return res.status(409).json({ message: 'Confirm at least one requirement before setting the baseline.' });
 
+    // fingerprint of exactly what is being approved
+    const hash = require('crypto').createHash('sha1')
+      .update(confirmed.map((r) => `${r._id}:${r.text}`).sort().join('|')).digest('hex');
+    const other = req.party === 'client' ? 'freelancer' : 'client';
+    const theirs = project.baselineApprovals?.[other];
+    const bothAgree = !!(theirs?.at && theirs.hash === hash);
+
+    // my approval (atomic: only while the project is not locked yet)
+    const marked = await Project.findOneAndUpdate({ _id: project._id, requirementsLocked: { $ne: true } },
+      { $set: { [`baselineApprovals.${req.party}`]: { at: new Date(), hash } } }, { returnDocument: 'after' });
+    if (!marked) return res.status(409).json({ message: 'The baseline is already set for this project.' });
+
+    if (!bothAgree) {
+      await notify(otherUserId(project, req.party), {
+        type: 'review_complete',
+        title: 'Please approve the project requirements',
+        message: `${req.user.name || 'The other person'} approved the requirement list for "${project.title}". Review it and approve to lock it in.`,
+        link: link(otherParty(req.party), project._id),
+        email: true,
+      });
+      return res.json({ locked: 0, requirementsLocked: false, waitingFor: other, approvedBy: [req.party] });
+    }
+
+    // second approval -> lock (only one request can win this switch)
+    const locked = await Project.findOneAndUpdate({ _id: project._id, requirementsLocked: { $ne: true } },
+      { $set: { requirementsLocked: true, baselineVersion: 1 } }, { returnDocument: 'after' });
+    if (!locked) return res.status(409).json({ message: 'The baseline is already set for this project.' });
+
     await Promise.all(confirmed.map(async (r) => {
       r.status = 'locked';
       await r.save();
     }));
     await RequirementHistory.insertMany(confirmed.map((r) => ({
       requirement: r._id, project: project._id, changedBy: req.user._id, changeType: 'status_change',
-      beforeText: r.text, afterText: r.text, beforeStatus: 'confirmed', afterStatus: 'locked', reason: 'Project baseline set',
+      beforeText: r.text, afterText: r.text, beforeStatus: 'confirmed', afterStatus: 'locked', reason: 'Project baseline v1 approved by both sides',
     })));
-
-    project.requirementsLocked = true;
-    await project.save();
 
     await notify(otherUserId(project, req.party), {
       type: 'review_complete',
       title: 'Project requirements are locked in',
-      message: `${confirmed.length} requirements for "${project.title}" are now the baseline. From now on, changes go through change requests.`,
+      message: `${confirmed.length} requirements for "${project.title}" are now the baseline (v1). From now on, changes go through change requests.`,
       link: link(otherParty(req.party), project._id),
       email: true,
     });
-    res.json({ locked: confirmed.length, requirementsLocked: true });
+    res.json({ locked: confirmed.length, requirementsLocked: true, baselineVersion: 1 });
   } catch (err) {
     console.error('[CR:baseline]', err.message);
     res.status(500).json({ message: 'Server error.' });

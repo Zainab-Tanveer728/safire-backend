@@ -12,7 +12,12 @@ const { notify } = require('../services/notificationService');
 const clean       = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 const otherParty  = (party) => (party === 'client' ? 'freelancer' : 'client');
 const otherUserId = (project, party) => (party === 'client' ? project.freelancer : project.client);
-const DECISIONS = ['in_favour_client', 'in_favour_freelancer', 'no_action'];
+// What each decision MEANS (an admin decision is never shown as "both agreed"):
+//   in_favour_client / in_favour_freelancer -> the admin sides with one person about this requirement
+//   enforce_baseline                        -> the agreed (locked) requirement stands exactly as written
+//   no_action                               -> nothing to change, the requirement is unfrozen
+//   terminate_project                       -> the admin ENDS the project (status "terminated", with the written reason). Not a mutual cancellation.
+const DECISIONS = ['in_favour_client', 'in_favour_freelancer', 'enforce_baseline', 'no_action', 'terminate_project'];
 
 // The evidence report: one timeline of everything that happened to this requirement.
 async function buildEvidence(project, requirement) {
@@ -112,6 +117,7 @@ exports.resolve = async (req, res) => {
     const note = clean(req.body.note);
     if (!DECISIONS.includes(decision)) return res.status(400).json({ message: `Decision must be one of: ${DECISIONS.join(', ')}.` });
     if (note.length < 5) return res.status(400).json({ message: 'Please write a short note explaining the decision.' });
+    if (decision === 'terminate_project' && note.length < 20) return res.status(400).json({ message: 'Ending a project needs a written reason of at least 20 characters.' });
 
     const updated = await Dispute.findOneAndUpdate(
       { _id: req.dispute._id, status: 'open' },
@@ -120,7 +126,12 @@ exports.resolve = async (req, res) => {
     );
     if (!updated) return res.status(409).json({ message: 'This dispute is already resolved.' });
 
-    const words = { in_favour_client: 'in favour of the client', in_favour_freelancer: 'in favour of the freelancer', no_action: 'with no action needed' };
+    if (decision === 'terminate_project') {
+      await require('../models/Project').updateOne({ _id: req.project._id, status: { $in: ['active', 'paused', 'disputed'] } },
+        { $set: { status: 'terminated', endedAt: new Date(), endReason: note, endedBy: req.user._id } });
+    }
+    const words = { in_favour_client: 'in favour of the client', in_favour_freelancer: 'in favour of the freelancer', enforce_baseline: 'that the agreed requirement stands as written',
+      no_action: 'with no action needed', terminate_project: 'to END this project (administrative termination, not a mutual cancellation)' };
     await Promise.all(['client', 'freelancer'].map((role) => notify(req.project[role], {
       type: 'dispute_resolved', title: 'Dispute resolved',
       message: `An admin decided ${words[decision]} for ${updated.requirementId}. ${note}`,

@@ -61,12 +61,14 @@ app.use('/api/', rateLimit({
 
 // ── Routes ─────────────────────────────────────────────────────────────────
 app.use('/api/auth',    require('./routes/authRoutes'));
+app.use('/api/client', require('./routes/clientRoutes'));
 app.use('/api/profile', require('./routes/profileRoutes'));
 app.use('/api/ai',      require('./routes/aiRoutes'));
 app.use('/api/admin',   require('./routes/adminRoutes'));
 app.use('/api/freelancer', require('./routes/freelancerRoutes')); 
 app.use('/api/proposals',  require('./routes/proposalRoutes'));   // <-- MODULE 2 (wapas joda)
 app.use('/uploads',     express.static(path.join(__dirname, 'uploads')));
+app.use('/api', require('./routes/reviewRoutes'));
 app.use('/api/projects', require('./routes/projectRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/meetings',     require('./routes/meetingRoutes'));

@@ -17,7 +17,7 @@ const disputeSchema = new mongoose.Schema({
   evidence: { type: mongoose.Schema.Types.Mixed },
 
   resolution: {
-    decision:   { type: String, enum: ['in_favour_client', 'in_favour_freelancer', 'no_action'] },
+    decision:   { type: String, enum: ['in_favour_client', 'in_favour_freelancer', 'enforce_baseline', 'no_action', 'terminate_project'] },
     note:       { type: String },
     resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     resolvedAt: { type: Date },

@@ -386,9 +386,13 @@ const passport   = require('passport');
 const router     = express.Router();
 
 const User = require('../models/User');
+const ClientProfile = require('../models/ClientProfile');
 const { protect } = require('../middleware/authMiddleware');
 const { buildUserPayload } = require('../utils/userPayload');
 const { sendOtpEmail, sendPasswordResetEmail, sendVerifiedEmail } = require('../services/emailService');
+const { registerClient } = require('../controllers/clientController');
+const { registerClientValidator } = require('../validators/clientValidator');
+const { validateRequest } = require('../middleware/validate');
 const {
   githubConnect,
   githubCallback,
@@ -472,6 +476,8 @@ router.post('/check-email', async (req, res) => {
   }
 });
 
+router.post('/register/client', registerLimiter, registerClientValidator, validateRequest, registerClient);
+
 router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
@@ -489,6 +495,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     const user = await User.create({ name, email, password: hashed, role, otp, otpExpiry });
+    if (role === 'client') await ClientProfile.create({ userId: user._id });
     const emailSent = await sendOtpEmail(email, otp, 10);
 
     res.status(201).json({
@@ -530,18 +537,22 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Wrong credentials  (C1: lockout resets after it expires)
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      if (user) {
-        const lockExpired = user.lockUntil && user.lockUntil <= Date.now();
-        const attempts    = (lockExpired ? 0 : (user.loginAttempts || 0)) + 1;
-        await User.updateOne({ _id: user._id }, {
-          $set: {
-            loginAttempts: attempts,
-            lockUntil:     attempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null,
-          },
-        });
-      }
+    if (!user) {
+      return res.status(404).json({
+        message: 'No account found with this email. Please register first.',
+      });
+    }
+
+    // Wrong password (C1: lockout resets after it expires)
+    if (!(await bcrypt.compare(password, user.password))) {
+      const lockExpired = user.lockUntil && user.lockUntil <= Date.now();
+      const attempts    = (lockExpired ? 0 : (user.loginAttempts || 0)) + 1;
+      await User.updateOne({ _id: user._id }, {
+        $set: {
+          loginAttempts: attempts,
+          lockUntil:     attempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null,
+        },
+      });
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
 
@@ -573,12 +584,13 @@ router.post('/login', async (req, res) => {
     console.log(`✅ [Login] ${user.email} (${user.role})`);
 
     // A1: return the full user payload including onboarding state
+    const userPayload = await buildUserPayload(user);
     res.json({
       token,
       role:   user.role,
       name:   user.name,
       userId: user._id,
-      user:   buildUserPayload(user),
+      user:   userPayload,
     });
 
   } catch (err) {
@@ -620,6 +632,7 @@ router.post('/verify-otp', otpLimiter, async (req, res) => {
         },
       }
     );
+    user.isVerified = true;
 
     const token = jwt.sign(
       { userId: user._id, role: user.role },
@@ -629,13 +642,14 @@ router.post('/verify-otp', otpLimiter, async (req, res) => {
 
     sendVerifiedEmail({ to: user.email, name: user.name }); // fire-and-forget, never throws
 
+    const userPayload = await buildUserPayload(user);
     res.json({
       message:    'Email verified!',
       token,
       role:       user.role,
       name:       user.name,
-      onboarding: buildUserPayload(user).onboarding,
-      user:       buildUserPayload(user),
+      onboarding: userPayload.onboarding,
+      user:       userPayload,
     });
   } catch (err) {
     console.error('[VerifyOTP]', err.message);
