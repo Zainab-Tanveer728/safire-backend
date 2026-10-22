@@ -2,6 +2,7 @@ require('dotenv').config();
 const passport       = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const User           = require('./src/models/User');
+const ClientProfile  = require('./src/models/ClientProfile');
 
 const googleClientId     = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -58,6 +59,10 @@ if (!googleClientId || !googleClientSecret) {
             skillsReviewed:   false,
           }
         });
+
+        if (assignedRole === 'client') {
+          await ClientProfile.create({ userId: user._id });
+        }
 
         console.log(`✨ New ${assignedRole} created via Google: ${email}`);
         return done(null, user);

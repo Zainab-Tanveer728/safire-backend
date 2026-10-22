@@ -66,13 +66,18 @@ async function runSweep(now = new Date()) {
   return result;
 }
 
+const runDeliverySweep = async (now) => ({ ...(await require('../controllers/deliveryController').sweep(now)), ...(await require('../controllers/projectEndController').sweep(now)) });
+
 let timer = null;
 function start(everyMs = 60 * 60 * 1000) {
   if (timer) return timer;
-  timer = setInterval(() => runSweep().catch((e) => console.error('[CR:sweep]', e.message)), everyMs);
+  timer = setInterval(() => {
+    runSweep().catch((e) => console.error('[CR:sweep]', e.message));
+    runDeliverySweep().catch((e) => console.error('[Delivery:sweep]', e.message));   // reminders + auto-accept of unanswered deliveries
+  }, everyMs);
   timer.unref?.();                                                      // never keeps the server alive on its own
   return timer;
 }
 const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
 
-module.exports = { runSweep, start, stop };
+module.exports = { runSweep, runDeliverySweep, start, stop };

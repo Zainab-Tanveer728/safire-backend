@@ -4,7 +4,7 @@ const router = express.Router();
 const clientController = require("../controllers/clientController");
 const { protect } = require("../middleware/authMiddleware");
 const { validateRequest } = require("../middleware/validate");
-const { companySetupValidator } = require("../validators/clientValidators");
+const { companySetupValidator } = require("../validators/clientValidator");
 const multerUpload = require("../config/multer");
 
 // ── Public routes (no auth required) ─────────────────────────────────────────
