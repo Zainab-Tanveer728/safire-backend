@@ -29,13 +29,34 @@ const nodemailer = require('nodemailer');
 const BRAND = '#6C2BD9';
 
 // ── Transport ──────────────────────────────────────────────────────────────
-// FIX: the old config used `service: 'gmail'` which defaults to port 465 and
-// often times out (ETIMEDOUT) on networks that block 465 or have broken IPv6.
-// Now: port 587 + STARTTLS, forced IPv4, and explicit timeouts.
+// Two modes, chosen by environment variables:
+//  1. SMTP relay (Brevo)  : set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM
+//     Use this on Render's free tier, which blocks ports 25, 465 and 587 (so Gmail cannot work there).
+//  2. Gmail (your laptop) : set EMAIL_USER and EMAIL_PASS (a Gmail App Password)
+//     Port 587 + STARTTLS, forced IPv4 and explicit timeouts (the settings that fixed ETIMEDOUT locally).
 let transporter = null;
+
+const FROM_ADDRESS = () => process.env.EMAIL_FROM || process.env.EMAIL_USER;
+const usingRelay = () => !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 
 function getTransporter() {
   if (transporter) return transporter;
+
+  if (usingRelay()) {
+    const port = Number(process.env.SMTP_PORT || 2525);
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port,
+      secure: port === 465,
+      family: 4,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
+    });
+    return transporter;
+  }
+
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return null;
   // Gmail App Passwords are shown with spaces ("abcd efgh ijkl mnop"); they must be removed.
   const pass = String(process.env.EMAIL_PASS).replace(/\s+/g, '');
@@ -57,16 +78,16 @@ function getTransporter() {
 async function verifyEmailSetup() {
   const t = getTransporter();
   if (!t) {
-    console.error('❌ [Email] EMAIL_USER / EMAIL_PASS not set in .env');
+    console.error('❌ [Email] No mail settings. Set SMTP_HOST/SMTP_USER/SMTP_PASS (Brevo) or EMAIL_USER/EMAIL_PASS (Gmail).');
     return false;
   }
   try {
     await t.verify();
-    console.log('✅ [Email] Ready — sending from:', process.env.EMAIL_USER);
+    console.log(`✅ [Email] Ready (${usingRelay() ? 'SMTP relay' : 'Gmail'}) — sending from:`, FROM_ADDRESS());
     return true;
   } catch (err) {
     console.error('❌ [Email] Transporter error:', err.message);
-    console.error('   Fix: EMAIL_PASS must be a Gmail App Password (16 chars, no spaces).');
+    console.error('   Fix: Gmail needs an App Password (16 chars, no spaces). Brevo needs the SMTP key, not the account password.');
     return false;
   }
 }
@@ -105,7 +126,7 @@ function layout({ heading, body, headingColor = BRAND }) {
 async function sendEmail({ to, subject, html, text }) {
   const t = getTransporter();
   if (!t) {
-    console.warn('[Email] EMAIL_USER / EMAIL_PASS not set. Skipped email to', to);
+    console.warn('[Email] No mail settings. Skipped email to', to);
     return false;
   }
   if (!to) {
@@ -114,7 +135,7 @@ async function sendEmail({ to, subject, html, text }) {
   }
   try {
     await t.sendMail({
-      from: `"Safire" <${process.env.EMAIL_USER}>`,
+      from: `"Safire" <${FROM_ADDRESS()}>`,
       to,
       subject: oneLine(subject),
       html,
@@ -123,8 +144,8 @@ async function sendEmail({ to, subject, html, text }) {
     return true;
   } catch (err) {
     console.error('[Email] Failed to', to, '-', err.code || '', err.message);
-    if (err.code === 'EAUTH') console.error('   Gmail rejected the login. EMAIL_PASS must be a Gmail App Password.');
-    if (err.code === 'ETIMEDOUT' || err.code === 'ECONNECTION' || err.code === 'ESOCKET') console.error('   Cannot reach smtp.gmail.com:587. Check the internet, VPN, firewall or antivirus.');
+    if (err.code === 'EAUTH') console.error('   The mail server rejected the login. Check the Gmail App Password or the Brevo SMTP key.');
+    if (err.code === 'ETIMEDOUT' || err.code === 'ECONNECTION' || err.code === 'ESOCKET') console.error(usingRelay() ? '   Cannot reach the mail relay. Check SMTP_HOST and SMTP_PORT (use 2525 on Render).' : '   Cannot reach smtp.gmail.com:587. Check the internet, VPN, firewall or antivirus. On Render free tier Gmail is blocked; use Brevo.');
     return false;
   }
 }
@@ -203,7 +224,7 @@ function sendNewDeviceLoginEmail({ to, name, device, ip, time = new Date() }) {
 // ── CI-2 + SDS admin flows: suspension / removal / reinstatement ───────────
 // status: 'suspended' | 'removed' | 'reinstated'
 function sendAccountStatusEmail({ to, name, status, reason, appealEmail }) {
-  const appeal = appealEmail || process.env.SUPPORT_EMAIL || process.env.EMAIL_USER;
+  const appeal = appealEmail || process.env.SUPPORT_EMAIL || FROM_ADDRESS();
   const copy = {
     suspended: {
       subject: 'Your Safire account has been suspended',
@@ -292,7 +313,7 @@ function sendMeetingInviteEmail({ to, name, inviterName, projectTitle, joinPath 
 // Recipients: ADMIN_ALERT_EMAIL in .env (comma-separated), else EMAIL_USER.
 // details: optional object, e.g. { userId, ip, attempts }
 function sendAdminAlertEmail({ title, message, details = {} }) {
-  const to = process.env.ADMIN_ALERT_EMAIL || process.env.EMAIL_USER;
+  const to = process.env.ADMIN_ALERT_EMAIL || FROM_ADDRESS();
   const rows = Object.entries(details)
     .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
     .join('\n');
