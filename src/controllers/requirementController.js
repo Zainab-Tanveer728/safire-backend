@@ -7,8 +7,8 @@
 //   - A 'locked' requirement (Module 5) can never change.
 //   - Every change is written to RequirementHistory (append-only audit log).
 const ExtractedRequirement = require('../models/ExtractedRequirement');
-const RequirementHistory   = require('../models/Requirementhistory');
-const RequirementDocument  = require('../models/Requirementdocument');
+const RequirementHistory   = require('../models/RequirementHistory');
+const RequirementDocument  = require('../models/RequirementDocument');
 const MeetingSession       = require('../models/MeetingSession');
 const { notify } = require('../services/notificationService');
 const { formatRequirementId, nextRequirementNumber } = require('../utils/requirementId');
